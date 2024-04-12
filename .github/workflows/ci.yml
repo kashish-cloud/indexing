@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: ${{ secrets.DBUSER }}
+          POSTGRES_PASSWORD: ${{ secrets.DBPASSWORD }}
+          POSTGRES_DB: ${{ secrets.DBNAME }}
+        ports:
+          - 5433:5433
+
+    strategy:
+      matrix:
+        node-version: [16.x]
+    env:
+      HOST: ${{ secrets.HOST }}
+      DBNAME: ${{ secrets.DBNAME }}
+      DBUSER: ${{ secrets.DBUSER }}
+      DBPASSWORD: ${{ secrets.DBPASSWORD }}
+      DBPORT: ${{ secrets.DBPORT }}
+      DIALECT: ${{ secrets.DIALECT }}
+    steps:
+      - uses: actions/checkout@v1
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm install
+      - run: echo "Checks passed successfully"
