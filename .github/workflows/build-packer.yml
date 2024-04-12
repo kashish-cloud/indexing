@@ -53,13 +53,13 @@ jobs:
       - name: Publish Web App Artifact
         uses: actions/upload-artifact@v2
         with:
-          name: webapp
-          path: webapp.zip
+          name: indexing
+          path: indexing.zip
 
       - name: check path
         run: |
           pwd
-          ls /home/runner/work/webapp/webapp
+          ls /home/runner/work/indexing/indexing
 
       - name: Build Image on GCP
         env:
