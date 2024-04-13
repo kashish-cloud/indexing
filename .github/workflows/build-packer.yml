@@ -48,7 +48,7 @@ jobs:
         run: packer init ami.pkr.hcl
 
       - name: Build Artifact
-        run: zip -r webapp.zip . -x ".git*" -x ".github*"
+        run: zip -r indexing.zip . -x ".git*" -x ".github*"
 
       - name: Publish Web App Artifact
         uses: actions/upload-artifact@v2
@@ -76,3 +76,54 @@ jobs:
                        -var "custom_image_family=${CUSTOM_IMAGE_FAMILY}" -var "custom_image_name=${CUSTOM_IMAGE_NAME}" \
                        -var "machine_type=${MACHINE_TYPE}" -var "disk_size=${DISK_SIZE}" -var "zone=${ZONE}" \
                        ami.pkr.hcl
+
+      - name: Extract Image ID from manifest
+        run: |
+          IMAGE_ID=$(jq -r '.builds[-1].artifact_id' manifest.json)
+          echo "Image ID: $IMAGE_ID"
+          echo "IMAGE_ID=${IMAGE_ID}" >> $GITHUB_ENV
+
+      - name: Create new Instance Template version
+        id: create_template
+        run: |
+          gcloud compute instance-templates create-version "webapp-template" \
+            --source-instance-template="webapp-template" \
+            --name="webapp-template-v2"
+
+      - name: Configure managed instance group
+        run: |
+          gcloud compute instance-groups managed set-instance-template "my-instance-group-manager" \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --template="webapp-template-v2" \
+            --region="us-east1"
+
+      - name: Start rolling update
+        run: |
+          gcloud compute instance-groups managed rolling-action start-update "my-instance-group-manager" \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --version="webapp-template-v2" \
+            --region="us-east1" \
+            --max-unavailable=0
+
+      - name: Wait for refresh
+        run: |
+          echo "Waiting for managed instance group refresh to complete..."
+          # Set initial wait time to 0
+          WAIT_TIME=0
+          # Loop until refresh is complete or timeout reached
+          while true; do
+            # Check if the refresh is complete
+            STATUS=$(gcloud compute instance-groups managed describe "my-instance-group-manager" --region="us-east1" --format="value(currentActions)")
+            if [[ "$STATUS" == "[]" ]]; then
+              echo "Managed instance group refresh complete."
+              break
+            fi
+            # Increment wait time and sleep for a while before checking again
+            WAIT_TIME=$((WAIT_TIME + 10))
+            if [ $WAIT_TIME -ge 600 ]; then
+              echo "Timeout reached while waiting for managed instance group refresh."
+              exit 1
+            fi
+            echo "Waiting for refresh to complete..."
+            sleep 10
+          done
