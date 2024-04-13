@@ -4,14 +4,6 @@ const logger = require("../logger.js");
 
 const router = express.Router();
 
-/*const pool = new Pool({
-  user: process.env.DBUSER,
-  host: process.env.HOST,
-  database: process.env.DBNAME,
-  password: process.env.DBPASSWORD,
-  port: process.env.DBPORT,
-});*/
-
 // Handle HEAD request
 router.head("/healthz", (req, res) => {
   logger.warn("HEAD request received, responding with 405 Method Not Allowed");
