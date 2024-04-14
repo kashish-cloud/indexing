@@ -133,7 +133,7 @@ jobs:
         run: |
           gcloud compute instance-groups managed rolling-action start-update "my-instance-group-manager" \
             --project=${{ secrets.GCP_PROJECT_ID }} \
-            --version=template=projects/cloudsetup9/regions/us-east1/instanceTemplates/${{ steps.create_template.outputs.template_name }} \
+            --version=template=projects/${{ secrets.GCP_PROJECT_ID }}/regions/us-east1/instanceTemplates/${{ steps.create_template.outputs.template_name }} \
             --region="us-east1" \
             --max-unavailable=0
 
