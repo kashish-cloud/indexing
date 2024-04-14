@@ -117,7 +117,7 @@ jobs:
             --subnet=${{ secrets.GCP_SUBNET }} \
             --service-account=ops-agent-service-account@tf-gcp-infra-project.iam.gserviceaccount.com \
             --scopes=logging-write,monitoring-write,https://www.googleapis.com/auth/pubsub \
-            --metadata=DBUSER=webapp,DBPASSWORD=${{ secrets.GCP_MYSQL_PASSWORD }},HOST=${{ secrets.GCP_MYSQL_HOST }},DBNAME=webapp \
+            --metadata=DBUSER=webapp,DBPASSWORD="${{ secrets.GCP_MYSQL_PASSWORD }}",HOST=${{ secrets.GCP_MYSQL_HOST }},DBNAME=webapp \
             --metadata-from-file=startup-script=startup-script.sh
           echo "New template $TEMPLATE_NAME created with image $IMAGE_ID"
           echo "::set-output name=template_name::$TEMPLATE_NAME"
