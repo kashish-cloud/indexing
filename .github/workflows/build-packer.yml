@@ -48,13 +48,13 @@ jobs:
         run: packer init ami.pkr.hcl
 
       - name: Build Artifact
-        run: zip -r indexing.zip . -x ".git*" -x ".github*"
+        run: zip -r webapp.zip . -x ".git*" -x ".github*"
 
       - name: Publish Web App Artifact
         uses: actions/upload-artifact@v2
         with:
-          name: indexing
-          path: indexing.zip
+          name: webapp
+          path: webapp.zip
 
       - name: check path
         run: |
