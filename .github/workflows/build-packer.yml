@@ -96,6 +96,14 @@ jobs:
            # Ensure /opt/webapp directory exists
            mkdir -p /opt/webapp
 
+          echo "HOST='${{ secrets.GCP_MYSQL_HOST }}'" > /opt/webapp/.env
+          echo "DBPORT=5432" >> /opt/webapp/.env
+          echo "DBNAME='${{ secrets.GCP_MYSQL_DBNAME }}'" >> /opt/webapp/.env
+          echo "DBUSER='${{ secrets.GCP_MYSQL_DBUSER }}'" >> /opt/webapp/.env
+          echo "DBPASSWORD='${{ secrets.GCP_MYSQL_PASSWORD }}'" >> /opt/webapp/.env
+          sudo systemctl start kas.service
+          EOF
+
       - name: Create new Instance Template version
         id: create_template
         run: |
@@ -117,7 +125,7 @@ jobs:
             --subnet=${{ secrets.GCP_SUBNET }} \
             --service-account=ops-agent-service-account@tf-gcp-infra-project.iam.gserviceaccount.com \
             --scopes=logging-write,monitoring-write,https://www.googleapis.com/auth/pubsub \
-            --metadata=DBUSER=webapp,DBPASSWORD="${{ secrets.GCP_MYSQL_PASSWORD }}",HOST=${{ secrets.GCP_MYSQL_HOST }},DBNAME=webapp \
+            --metadata=DBUSER=${{ secrets.GCP_MYSQL_DBUSER }},DBPASSWORD="${{ secrets.GCP_MYSQL_PASSWORD }}",HOST=${{ secrets.GCP_MYSQL_HOST }},DBNAME=${{ secrets.GCP_MYSQL_DBNAME }} \
             --metadata-from-file=startup-script=startup-script.sh
           echo "New template $TEMPLATE_NAME created with image $IMAGE_ID"
           echo "::set-output name=template_name::$TEMPLATE_NAME"
