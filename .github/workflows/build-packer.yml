@@ -83,47 +83,67 @@ jobs:
           echo "Image ID: $IMAGE_ID"
           echo "IMAGE_ID=${IMAGE_ID}" >> $GITHUB_ENV
 
+      - name: Prepare startup script
+        run: |
+          cat << 'EOF' > startup-script.sh
+           #!/bin/bash
+
+           #Fetch metadata parameters
+           DB_USER=$(curl "http://metadata.google.internal/computeMetadata/v1/instance/attributes/db_user" -H "Metadata-Flavor: Google")
+           DB_PASSWORD=$(curl "http://metadata.google.internal/computeMetadata/v1/instance/attributes/db_password" -H "Metadata-Flavor: Google")
+           DB_HOST=$(curl "http://metadata.google.internal/computeMetadata/v1/instance/attributes/db_host" -H "Metadata-Flavor: Google")
+           DB_NAME=$(curl "http://metadata.google.internal/computeMetadata/v1/instance/attributes/db_name" -H "Metadata-Flavor: Google")
+           # Ensure /opt/webapp directory exists
+           mkdir -p /opt/webapp
+
       - name: Create new Instance Template version
         id: create_template
         run: |
-          gcloud compute instance-templates create-version "webapp-template" \
-            --source-instance-template="webapp-template" \
-            --name="webapp-template-v2"
+          TEMPLATE_NAME="my-template-$(date +%Y%m%d%H%M%S)"
+          IMAGE_PROJECT="${{ secrets.GCP_PROJECT_ID }}"
+          gcloud compute instance-templates create $TEMPLATE_NAME \
+            --project=$IMAGE_PROJECT \
+            --image=$IMAGE_ID \
+            --machine-type=e2-medium \
+            --tags=application \
+            --boot-disk-auto-delete \
+            --boot-disk-size=50 \
+            --boot-disk-type=pd-balanced \
+            --boot-disk-kms-keyring=${{ secrets.GCP_Key_ring }} \
+            --boot-disk-kms-key=${{ secrets.GCP_kms_Key }} \
+            --instance-template-region=us-east1 \
+            --region=us-east1 \
+            --network=${{ secrets.GCP_VPC }} \
+            --subnet=${{ secrets.GCP_SUBNET }} \
+            --service-account=ops-agent-service-account@tf-gcp-infra-project.iam.gserviceaccount.com \
+            --scopes=logging-write,monitoring-write,https://www.googleapis.com/auth/pubsub \
+            --metadata=DBUSER=webapp,DBPASSWORD=${{ secrets.GCP_MYSQL_PASSWORD }},HOST=${{ secrets.GCP_MYSQL_HOST }},DBNAME=webapp \
+            --metadata-from-file=startup-script=startup-script.sh
+          echo "New template $TEMPLATE_NAME created with image $IMAGE_ID"
+          echo "::set-output name=template_name::$TEMPLATE_NAME"
 
-      - name: Configure managed instance group
+      - name: Update Managed Instance Group
         run: |
           gcloud compute instance-groups managed set-instance-template "my-instance-group-manager" \
             --project=${{ secrets.GCP_PROJECT_ID }} \
-            --template="webapp-template-v2" \
+            --template=projects/tf-gcp-infra-project/regions/us-east1/instanceTemplates/${{ steps.create_template.outputs.template_name }} \
             --region="us-east1"
 
       - name: Start rolling update
         run: |
           gcloud compute instance-groups managed rolling-action start-update "my-instance-group-manager" \
             --project=${{ secrets.GCP_PROJECT_ID }} \
-            --version="webapp-template-v2" \
+            --version=template=projects/cloudsetup9/regions/us-east1/instanceTemplates/${{ steps.create_template.outputs.template_name }} \
             --region="us-east1" \
             --max-unavailable=0
 
-      - name: Wait for refresh
+      - name: Wait for Update to Complete
         run: |
-          echo "Waiting for managed instance group refresh to complete..."
-          # Set initial wait time to 0
-          WAIT_TIME=0
-          # Loop until refresh is complete or timeout reached
-          while true; do
-            # Check if the refresh is complete
-            STATUS=$(gcloud compute instance-groups managed describe "my-instance-group-manager" --region="us-east1" --format="value(currentActions)")
-            if [[ "$STATUS" == "[]" ]]; then
-              echo "Managed instance group refresh complete."
-              break
-            fi
-            # Increment wait time and sleep for a while before checking again
-            WAIT_TIME=$((WAIT_TIME + 10))
-            if [ $WAIT_TIME -ge 600 ]; then
-              echo "Timeout reached while waiting for managed instance group refresh."
-              exit 1
-            fi
-            echo "Waiting for refresh to complete..."
-            sleep 10
-          done
+          gcloud compute instance-groups managed wait-until "my-instance-group-manager" \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --version-target-reached \
+            --region="us-east1"
+
+      - name: Waiting for instance group to get stable
+        run: |
+          gcloud compute instance-groups managed wait-until "my-instance-group-manager" --stable --region=us-east1 --project=${{ secrets.GCP_PROJECT_ID }}
